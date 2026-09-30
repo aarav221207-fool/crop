@@ -52,8 +52,8 @@ export interface WeatherData {
   forecast: WeatherForecastDay[];
   historical?: any[];
   quality: {
-    completeness: number;
-    accuracy: number;
+    completeness?: number;
+    accuracy?: number;
     freshness?: number;
     timeliness?: number;
     reliabilityScore?: number;
@@ -81,7 +81,7 @@ export interface SatelliteData {
   sceneId?: string;
   productId?: string;
   mgrsTile?: string;
-  cloudCover: number;
+  cloudCover?: number;
   resolutionMeters?: number;
   resolution?: number;
   processingLevel: string;
@@ -91,8 +91,8 @@ export interface SatelliteData {
   footprintGeometry?: string | Record<string, any>;
   retrievalTimestamp?: string;
   quality?: {
-    completeness: number;
-    accuracy: number;
+    completeness?: number;
+    accuracy?: number;
     freshness?: number;
     timeliness?: number;
     lastValidated?: string | Date;
@@ -126,8 +126,8 @@ export interface SoilData {
       silt: number;
       clay: number;
     };
-    ph: number;
-    organicCarbon: number;
+    ph?: number;
+    organicCarbon?: number;
     nitrogen?: number;
     phosphorus?: number;
     potassium?: number;

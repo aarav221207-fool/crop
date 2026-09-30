@@ -230,11 +230,11 @@ export const DigitalTwinView: React.FC<DigitalTwinViewProps> = ({
               <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-[11px]">
                 <div className="border border-slate-800/80 p-2 bg-slate-900/40">
                   <span className="text-slate-500 block">Soil pH:</span>
-                  <span className="text-white font-bold">{soil.soilProperties.ph}</span>
+                  <span className="text-white font-bold">{soil.soilProperties.ph !== undefined ? soil.soilProperties.ph : 'Unavailable'}</span>
                 </div>
                 <div className="border border-slate-800/80 p-2 bg-slate-900/40">
                   <span className="text-slate-500 block">Organic Carbon:</span>
-                  <span className="text-emerald-400 font-bold">{soil.soilProperties.organicCarbon} g/kg</span>
+                  <span className="text-emerald-400 font-bold">{soil.soilProperties.organicCarbon !== undefined ? `${soil.soilProperties.organicCarbon} g/kg` : 'Unavailable'}</span>
                 </div>
                 <div className="border border-slate-800/80 p-2 bg-slate-900/40">
                   <span className="text-slate-500 block">Classification:</span>

@@ -62,115 +62,7 @@ export const FarmsView: React.FC<FarmsViewProps> = ({
   // Boundary input (lat, lon pairs)
   const [boundaryCoordsText, setBoundaryCoordsText] = useState<string>('');
 
-  const NATIONWIDE_INDIAN_PRESETS = [
-    {
-      region: 'North India (Punjab)',
-      state: 'Punjab',
-      district: 'Ludhiana',
-      name: 'Ludhiana Wheat & Mustard Plot',
-      latitude: 30.9010,
-      longitude: 75.8573,
-      cropType: CropType.WHEAT,
-      varietyName: 'HD-3086 (Pusa Gautami)',
-      soilType: SoilType.ALLUVIAL,
-      irrigationType: IrrigationType.SPRINKLER,
-      boundary: '30.9020, 75.8560\n30.9020, 75.8585\n30.9000, 75.8585\n30.9000, 75.8560',
-    },
-    {
-      region: 'South India (Karnataka)',
-      state: 'Karnataka',
-      district: 'Dharwad',
-      name: 'Dharwad Cotton & Chilli Field',
-      latitude: 15.4589,
-      longitude: 75.0078,
-      cropType: CropType.COTTON,
-      varietyName: 'DHH-11 Hybrid',
-      soilType: SoilType.BLACK_CLAY,
-      irrigationType: IrrigationType.DRIP,
-      boundary: '15.4600, 75.0065\n15.4600, 75.0090\n15.4580, 75.0090\n15.4580, 75.0065',
-    },
-    {
-      region: 'East India (West Bengal)',
-      state: 'West Bengal',
-      district: 'Bardhaman',
-      name: 'Bardhaman Aman Rice Parcel',
-      latitude: 23.2324,
-      longitude: 87.8615,
-      cropType: CropType.RICE,
-      varietyName: 'Swarna (MTU-7029)',
-      soilType: SoilType.ALLUVIAL,
-      irrigationType: IrrigationType.FLOOD,
-      boundary: '23.2335, 87.8600\n23.2335, 87.8630\n23.2315, 87.8630\n23.2315, 87.8600',
-    },
-    {
-      region: 'West India (Maharashtra)',
-      state: 'Maharashtra',
-      district: 'Nashik',
-      name: 'Nashik Soybean & Onion Field',
-      latitude: 19.9975,
-      longitude: 73.7898,
-      cropType: CropType.SOYBEAN,
-      varietyName: 'JS-335 Improved',
-      soilType: SoilType.CLAY_LOAM,
-      irrigationType: IrrigationType.DRIP,
-      boundary: '19.9985, 73.7885\n19.9985, 73.7910\n19.9965, 73.7910\n19.9965, 73.7885',
-    },
-    {
-      region: 'Central India (Madhya Pradesh)',
-      state: 'Madhya Pradesh',
-      district: 'Hoshangabad',
-      name: 'Narmada Valley Wheat & Gram Farm',
-      latitude: 22.7519,
-      longitude: 77.7289,
-      cropType: CropType.WHEAT,
-      varietyName: 'Sharbati MP-306',
-      soilType: SoilType.BLACK_CLAY,
-      irrigationType: IrrigationType.SPRINKLER,
-      boundary: '22.7530, 77.7275\n22.7530, 77.7305\n22.7510, 77.7305\n22.7510, 77.7275',
-    },
-    {
-      region: 'Northeast India (Assam)',
-      state: 'Assam',
-      district: 'Nagaon',
-      name: 'Brahmaputra Valley Sali Rice Farm',
-      latitude: 26.3465,
-      longitude: 92.6840,
-      cropType: CropType.RICE,
-      varietyName: 'Ranjit Sub-1',
-      soilType: SoilType.ALLUVIAL,
-      irrigationType: IrrigationType.RAINFED,
-      boundary: '26.3475, 92.6825\n26.3475, 92.6855\n26.3455, 92.6855\n26.3455, 92.6825',
-    },
-    {
-      region: 'Himalayan Region (Himachal Pradesh)',
-      state: 'Himachal Pradesh',
-      district: 'Shimla',
-      name: 'Shimla Valley Apple & Maize Terraces',
-      latitude: 31.1048,
-      longitude: 77.1734,
-      cropType: CropType.MAIZE,
-      varietyName: 'Pusa Composite-3',
-      soilType: SoilType.SANDY_LOAM,
-      irrigationType: IrrigationType.DRIP,
-      boundary: '31.1060, 77.1720\n31.1060, 77.1750\n31.1035, 77.1750\n31.1035, 77.1720',
-    },
-  ];
-
-  const applyPreset = (preset: typeof NATIONWIDE_INDIAN_PRESETS[0]) => {
-    setFarmName(preset.name);
-    setDistrict(preset.district);
-    setState(preset.state);
-    setLatitude(preset.latitude);
-    setLongitude(preset.longitude);
-    setCropType(preset.cropType);
-    setVarietyName(preset.varietyName);
-    setSoilType(preset.soilType);
-    setIrrigationType(preset.irrigationType);
-    setBoundaryCoordsText(preset.boundary);
-    parseBoundaryAndCalcArea(preset.boundary);
-  };
-
-  // Helper to parse boundary text and calculate approx polygon area (Ha)
+  // Clean form input handlers without fake pre-seeded demo farms
   const parseBoundaryAndCalcArea = (text: string) => {
     try {
       const lines = text.trim().split('\n').filter(Boolean);
@@ -383,18 +275,18 @@ export const FarmsView: React.FC<FarmsViewProps> = ({
 
       {/* 3. Empty State or Inventory Data Table */}
       {farms.length === 0 ? (
-        <div className="border border-slate-800 bg-[#121820] p-12 text-center rounded-xs space-y-4 font-mono">
-          <div className="text-slate-500 text-xs uppercase tracking-wider">Zero Farm Records In Database</div>
-          <h2 className="text-2xl font-semibold text-white">No Registered Farms</h2>
-          <p className="text-slate-400 text-sm max-w-md mx-auto font-sans leading-relaxed">
-            In accordance with the zero-fake-data policy, no mock farms are automatically seeded. Create your first agricultural parcel to start tracking biophysical telemetry.
+        <div className="bg-[#11171f] border border-stone-800 rounded-xl p-12 text-center max-w-lg mx-auto space-y-4">
+          <div className="text-3xl">🌱</div>
+          <h2 className="text-xl font-bold text-white tracking-tight">No farms yet</h2>
+          <p className="text-stone-400 text-xs max-w-md mx-auto leading-relaxed">
+            Create your first farm to start your digital twin with live weather observations, satellite telemetry, and biophysical crop simulations.
           </p>
           <div className="pt-2">
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xs transition-colors cursor-pointer"
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
             >
-              + Register New Farm
+              <span>+ Add farm</span>
             </button>
           </div>
         </div>
@@ -623,25 +515,6 @@ export const FarmsView: React.FC<FarmsViewProps> = ({
             )}
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
-              {/* Nationwide Regional Indian Quick-Presets */}
-              <div className="p-3 bg-[#111923] border border-slate-800 rounded-xs space-y-2">
-                <span className="text-[10px] text-slate-400 uppercase font-mono block">
-                  Quick-Fill Indian Agro-Climatic Zone Presets (Nationwide Testing):
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {NATIONWIDE_INDIAN_PRESETS.map((p) => (
-                    <button
-                      key={p.region}
-                      type="button"
-                      onClick={() => applyPreset(p)}
-                      className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-mono text-slate-300 hover:text-white rounded-xs transition-colors cursor-pointer"
-                    >
-                      {p.region}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-slate-300 font-semibold block">Farm / Parcel Name:</label>

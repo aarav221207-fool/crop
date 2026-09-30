@@ -145,26 +145,22 @@ function buildFarmContextPrompt(farm: any, weather: any, satellite: any, soil: a
 - In accordance with zero-fake-data rules, do NOT invent soil chemistry values.
 `;
 
-  const stress = currentState?.stressIndicators || {
-    waterStress: 0.45,
-    heatStress: 0.25,
-    nutrientStress: 0.20,
-    pestRisk: 0.30,
-    diseaseRisk: 0.15,
-  };
-
-  const stressText = `
-[CROPTWIN BIOPHYSICAL STRESS CALCULATIONS] - Status: MODEL RESULT
+  const stress = currentState?.stressIndicators;
+  const stressText = stress ? `
+[TERRATWIN BIOPHYSICAL STRESS CALCULATIONS] - Status: MODEL RESULT
 - Water Deficit Stress: ${(stress.waterStress * 100).toFixed(0)}% (FAO-56 Soil Moisture Deficit)
-- Thermal Heat Stress: ${(stress.heatStress * 100).toFixed(0)}% (Relative to ${cropParams?.optimalTemperatureMax || 32}°C ceiling)
+- Thermal Heat Stress: ${(stress.heatStress * 100).toFixed(0)}% (Relative to ${cropParams?.optimalTemperatureMax ? `${cropParams.optimalTemperatureMax}°C ceiling` : 'thermal ceiling'})
 - Pest Infestation Risk: ${(stress.pestRisk * 100).toFixed(0)}% (RH & Temp coincidence model)
 - Pathogen Disease Risk: ${(stress.diseaseRisk * 100).toFixed(0)}% (Leaf wetness & canopy humidity model)
+` : `
+[TERRATWIN BIOPHYSICAL STRESS CALCULATIONS] - Status: UNAVAILABLE
+- Biophysical stress calculations are awaiting live soil and canopy observations.
 `;
 
   const yieldText = currentState?.predictedYield ? `
 [BIOLOGICAL YIELD PROJECTION] - Status: MODEL PREDICTION (Not measured actual yield)
 - Model Prediction: ${currentState.predictedYield} kg/ha
-- Baseline Potential under Optimal Agronomy: ${cropParams?.yieldPotential?.optimal || 2400} kg/ha
+- Baseline Potential under Optimal Agronomy: ${cropParams?.yieldPotential?.optimal ? `${cropParams.yieldPotential.optimal} kg/ha` : 'UNAVAILABLE'}
 ` : `
 [BIOLOGICAL YIELD PROJECTION] - Status: MODEL PREDICTION
 - Yield prediction calculation is running against active telemetry.
@@ -326,16 +322,38 @@ app.get('/api/sms/status', (req: Request, res: Response) => {
 // 4. Server-Side Biophysical Crop Simulation Engine
 app.post('/api/simulation/run', (req: Request, res: Response) => {
   try {
-    const { cropType, daysAfterPlanting, soilMoisture, baseTemp = 12 } = req.body;
-    const type = (cropType as CropType) || CropType.COTTON;
-    const params = CROP_PARAMETERS_REGISTRY[type] || CROP_PARAMETERS_REGISTRY[CropType.COTTON];
+    const { cropType, daysAfterPlanting, soilMoisture, ambientTemperature, rainfall7Days = 0, irrigationType } = req.body;
 
-    // GDD and phenology calculation
-    const dailyMeanTemp = 31.0;
-    const dailyGdd = Math.max(0, dailyMeanTemp - (params.baseTemperature || baseTemp));
-    const accumulatedGdd = Math.round(dailyGdd * (daysAfterPlanting || 65));
+    if (
+      !cropType ||
+      typeof daysAfterPlanting !== 'number' ||
+      typeof soilMoisture !== 'number' ||
+      typeof ambientTemperature !== 'number' ||
+      isNaN(daysAfterPlanting) ||
+      isNaN(soilMoisture) ||
+      isNaN(ambientTemperature)
+    ) {
+      return res.status(400).json({
+        status: 'unavailable',
+        error: 'Missing required simulation inputs. Crop simulation requires actual cropType, daysAfterPlanting, soilMoisture, and ambientTemperature from live farm observations. No fake defaults substituted.',
+      });
+    }
 
-    // Phenological stage deduction
+    const type = cropType as CropType;
+    const params = CROP_PARAMETERS_REGISTRY[type];
+    if (!params) {
+      return res.status(400).json({
+        status: 'unavailable',
+        error: `Unsupported crop type: ${cropType}. Registered crops: cotton, wheat, rice, maize, soybean, sugarcane, groundnut, mustard, pulses.`,
+      });
+    }
+
+    // Mathematical GDD and phenology calculation from real inputs
+    const baseTemp = params.baseTemperature;
+    const dailyGdd = Math.max(0, ambientTemperature - baseTemp);
+    const accumulatedGdd = Math.round(dailyGdd * daysAfterPlanting);
+
+    // Phenological stage deduction based on real accumulated DAP
     const stagesInOrder = [
       CropStage.GERMINATION,
       CropStage.VEGETATIVE,
@@ -357,16 +375,16 @@ app.post('/api/simulation/run', (req: Request, res: Response) => {
       accumulatedDays += dur;
     }
 
-    // Penman-Monteith reference evapotranspiration estimate
-    const et0 = 5.4; // mm/day
-    const moisture = typeof soilMoisture === 'number' ? soilMoisture : 28;
-    const waterStress = moisture < 35 ? Math.min(1, (35 - moisture) / 25) : 0;
-    const heatStress = dailyMeanTemp > params.optimalTemperatureMax ? Math.min(1, (dailyMeanTemp - params.optimalTemperatureMax) / 10) : 0.1;
-    const overallStress = Math.min(1, waterStress * 0.45 + heatStress * 0.35 + 0.1);
+    // Biophysical stress modeling from actual soil moisture and temperature
+    const waterStress = soilMoisture < 35 ? Math.min(1, Math.max(0, (35 - soilMoisture) / 25)) : 0;
+    const heatStress = ambientTemperature > params.optimalTemperatureMax
+      ? Math.min(1, Math.max(0, (ambientTemperature - params.optimalTemperatureMax) / 10))
+      : 0;
+    const overallStress = Math.min(1, waterStress * 0.50 + heatStress * 0.35);
 
-    // Yield attenuation
+    // Yield attenuation against actual genetic baseline potential
     const baselineYield = params.yieldPotential.optimal;
-    const projectedYield = Math.round(baselineYield * (1 - overallStress * 0.42));
+    const projectedYield = Math.round(baselineYield * (1 - overallStress * 0.45));
 
     res.json({
       simulationId: `sim_${Date.now()}`,
@@ -375,8 +393,10 @@ app.post('/api/simulation/run', (req: Request, res: Response) => {
       currentStage,
       accumulatedGdd,
       dailyGdd: Math.round(dailyGdd * 10) / 10,
-      soilMoisturePct: moisture,
-      et0MmDay: et0,
+      soilMoisturePct: soilMoisture,
+      ambientTemperatureCelsius: ambientTemperature,
+      rainfall7DaysMm: rainfall7Days,
+      irrigationType: irrigationType || 'drip',
       stressIndicators: {
         waterStress: Math.round(waterStress * 100) / 100,
         heatStress: Math.round(heatStress * 100) / 100,
@@ -485,18 +505,18 @@ YOUR ROLE: Explain WHY the stress and predicted yield changed under this scenari
 Strictly interpret the model result deltas. Clearly distinguish [MODEL RESULT] from [AI EXPLANATION].`;
 
     const prompt = `
-FARM: ${farmTwin?.location?.district || 'Field'} ${farmTwin?.farmConfiguration?.cropType?.toUpperCase() || 'CROP'}
-Current DAP: ${farmTwin?.currentState?.daysAfterPlanting || 65} (Stage: ${farmTwin?.currentState?.cropStage || 'Vegetative'})
+FARM: ${farmTwin?.location?.district || 'Field'} ${farmTwin?.farmConfiguration?.cropType ? farmTwin.farmConfiguration.cropType.toUpperCase() : 'CROP'}
+Current DAP: ${farmTwin?.currentState?.daysAfterPlanting !== undefined ? `${farmTwin.currentState.daysAfterPlanting} DAP` : 'UNAVAILABLE'} (Stage: ${farmTwin?.currentState?.cropStage || 'Vegetative'})
 
 SIMULATION SCENARIO INPUTS:
 - Scenario: ${scenarioDescription || 'Custom microclimate / irrigation scenario adjustment'}
 
 NUMERICAL MODEL OUTPUTS:
-Baseline Yield: ${baselineState?.yieldKgHa || 2100} kg/ha
-Simulated Yield: ${simulatedState?.yieldKgHa || 1850} kg/ha
-Yield Delta: ${deltas?.yieldDeltaKgHa > 0 ? '+' : ''}${deltas?.yieldDeltaKgHa || -250} kg/ha (${deltas?.yieldDeltaPct > 0 ? '+' : ''}${deltas?.yieldDeltaPct || -12}%)
-Water Stress: from ${(baselineState?.waterStress * 100 || 30).toFixed(0)}% to ${(simulatedState?.waterStress * 100 || 55).toFixed(0)}%
-Thermal Heat Stress: from ${(baselineState?.heatStress * 100 || 20).toFixed(0)}% to ${(simulatedState?.heatStress * 100 || 45).toFixed(0)}%
+Baseline Yield: ${baselineState?.yieldKgHa !== undefined ? `${baselineState.yieldKgHa} kg/ha` : 'UNAVAILABLE'}
+Simulated Yield: ${simulatedState?.yieldKgHa !== undefined ? `${simulatedState.yieldKgHa} kg/ha` : 'UNAVAILABLE'}
+Yield Delta: ${deltas?.yieldDeltaKgHa !== undefined ? `${deltas.yieldDeltaKgHa > 0 ? '+' : ''}${deltas.yieldDeltaKgHa} kg/ha (${deltas?.yieldDeltaPct !== undefined ? `${deltas.yieldDeltaPct > 0 ? '+' : ''}${deltas.yieldDeltaPct}%` : ''})` : 'UNAVAILABLE'}
+Water Stress: ${baselineState?.waterStress !== undefined && simulatedState?.waterStress !== undefined ? `from ${(baselineState.waterStress * 100).toFixed(0)}% to ${(simulatedState.waterStress * 100).toFixed(0)}%` : 'UNAVAILABLE'}
+Thermal Heat Stress: ${baselineState?.heatStress !== undefined && simulatedState?.heatStress !== undefined ? `from ${(baselineState.heatStress * 100).toFixed(0)}% to ${(simulatedState.heatStress * 100).toFixed(0)}%` : 'UNAVAILABLE'}
 
 Please provide:
 1. [MODEL RESULT SUMMARY]: Summary of the numerical shifts.
@@ -548,15 +568,15 @@ Clearly separate [MODEL RESULT] from [AI EXPLANATION].`;
 
     const prompt = `
 FARM: ${farmTwin?.location?.district || 'Field'}, ${farmTwin?.location?.state || 'India'}
-CROP: ${farmTwin?.farmConfiguration?.cropType?.toUpperCase() || 'Crop'} (Age: ${farmTwin?.currentState?.daysAfterPlanting || 65} DAP)
+CROP: ${farmTwin?.farmConfiguration?.cropType ? farmTwin.farmConfiguration.cropType.toUpperCase() : 'Crop'} (Age: ${farmTwin?.currentState?.daysAfterPlanting !== undefined ? `${farmTwin.currentState.daysAfterPlanting} DAP` : 'UNAVAILABLE'})
 
 DATA-DRIVEN ADVISORY FROM MODEL:
-Title: ${advisory?.title}
-Category: ${advisory?.category}
-Priority: ${advisory?.priority}
-Diagnosis: ${advisory?.description}
-Reasoning: ${advisory?.reasoning}
-Initial Action: ${advisory?.actionItems?.[0]?.action}
+Title: ${advisory?.title || 'Advisory'}
+Category: ${advisory?.category || 'General'}
+Priority: ${advisory?.priority || 'Normal'}
+Diagnosis: ${advisory?.description || 'No diagnosis available'}
+Reasoning: ${advisory?.reasoning || 'No model reasoning available'}
+Initial Action: ${advisory?.actionItems?.[0]?.action || 'Inspect field'}
 
 Please provide:
 1. [BIOPHYSICAL CAUSE]: Why this condition occurred given the crop stage and weather/moisture thresholds.

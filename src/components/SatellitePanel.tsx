@@ -245,7 +245,9 @@ export const SatellitePanel: React.FC<SatellitePanelProps> = ({
                 </div>
                 <div className="border border-slate-800 p-3 bg-slate-900/60 rounded-xs">
                   <span className="text-slate-500 block text-[11px]">Cloud Cover Mask</span>
-                  <span className="text-base font-bold text-slate-300 tabular-nums">&lt; {satellite.cloudCover}%</span>
+                  <span className="text-base font-bold text-slate-300 tabular-nums">
+                    {satellite.cloudCover !== undefined ? `${satellite.cloudCover}%` : 'Unavailable'}
+                  </span>
                 </div>
               </div>
 
@@ -293,7 +295,7 @@ export const SatellitePanel: React.FC<SatellitePanelProps> = ({
                     <span>EVI</span>
                     <span className="text-emerald-400">Enhanced Vigor</span>
                   </div>
-                  <div className="text-3xl font-bold text-white tabular-nums">{vi.evi?.toFixed(3) || '0.512'}</div>
+                  <div className="text-3xl font-bold text-white tabular-nums">{vi.evi !== undefined ? vi.evi.toFixed(3) : 'Unavailable'}</div>
                   <p className="text-[11px] text-slate-400 leading-normal font-sans">
                     Enhanced Vegetation Index reducing atmospheric and canopy background noise.
                   </p>
@@ -304,22 +306,27 @@ export const SatellitePanel: React.FC<SatellitePanelProps> = ({
                     <span>LAI</span>
                     <span className="text-emerald-400">Leaf Area Index</span>
                   </div>
-                  <div className="text-3xl font-bold text-white tabular-nums">{vi.lai?.toFixed(2) || '2.84'} m²/m²</div>
+                  <div className="text-3xl font-bold text-white tabular-nums">{vi.lai !== undefined ? `${vi.lai.toFixed(2)} m²/m²` : 'Unavailable'}</div>
                   <p className="text-[11px] text-slate-400 leading-normal font-sans">
                     Green leaf area per unit ground surface area.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="p-5 bg-[#0e141c] border border-slate-800 rounded-xs space-y-3 font-mono text-xs">
-                <div className="text-slate-300 font-bold uppercase text-[11px]">
-                  Derived Vegetation Index Pipeline Status
+              <div className="p-5 bg-[#0e141c] border border-amber-800/60 rounded-xs space-y-3 font-mono text-xs">
+                <div className="text-amber-300 font-bold uppercase text-xs flex items-center gap-2">
+                  <span>🛰️ Sentinel-2 scene available · NDVI calculation unavailable</span>
                 </div>
-                <p className="text-slate-400 font-sans text-xs leading-relaxed">
-                  Scene <strong className="text-slate-200">{satellite?.sceneId || 'Sentinel-2 L2A'}</strong> was successfully located in the Copernicus Data Space Ecosystem. However, computing pixel-level mathematical band ratios (B08 NIR minus B04 Red) requires downloading the 1.1GB full spectral SAFE raster bundle via CDSE OAuth credentials (<code className="text-emerald-400">COPERNICUS_CLIENT_SECRET</code>).
+                <p className="text-slate-300 font-sans text-xs leading-relaxed">
+                  Sentinel-2 Level-2A scene <strong className="text-white">{satellite?.sceneId || 'Sentinel-2 L2A'}</strong> was successfully located in the Copernicus Data Space Ecosystem. Finding a Sentinel-2 scene is not the same as calculating NDVI. Calculating NDVI requires downloading and processing the actual B04 (Red 665nm) and B08 (NIR 842nm) raw surface reflectance raster bands.
                 </p>
-                <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xs text-amber-300 text-[11px]">
-                  <strong>Zero-Fake-Data Guarantee:</strong> Rather than hardcoding fake NDVI numbers, TerraTwin honestly displays this state. Add CDSE credentials or Earth Engine token to automatically calculate mathematical band ratios.
+                <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xs text-[11px] text-slate-400 space-y-1">
+                  <div>• <strong>Red Band (B04):</strong> Raw spectral raster not processed</div>
+                  <div>• <strong>NIR Band (B08):</strong> Raw spectral raster not processed</div>
+                  <div>• <strong>Mathematical NDVI:</strong> <span className="text-amber-400 font-semibold">UNAVAILABLE</span></div>
+                </div>
+                <div className="text-[11px] text-slate-500 italic">
+                  In strict accordance with TerraTwin data honesty rules, NDVI is never fabricated without processed spectral bands.
                 </div>
               </div>
             )}

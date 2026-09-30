@@ -1,33 +1,21 @@
 /**
- * CropTwin - Supabase Client Configuration
+ * TerraTwin - Supabase Client Configuration
  * 
  * Strict Browser Security Contract:
- * - Uses ONLY the public Supabase URL and Anon / Publishable key in client code.
+ * - Uses ONLY the public Supabase URL and Anon / Publishable key in client code from environment variables.
+ * - NEVER reads or saves credentials in localStorage.
  * - NEVER imports or exposes SUPABASE_SERVICE_ROLE_KEY in the browser.
  */
 
-import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Read public credentials from environment
+// Read public credentials strictly from environment variables
 const ENV_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || '';
 const ENV_SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
 
-// Fallback to locally stored settings if configured via System panel
-const STORED_URL_KEY = 'croptwin_supabase_url';
-const STORED_ANON_KEY = 'croptwin_supabase_anon_key';
-
 export function getSupabaseCredentials(): { url: string; anonKey: string; isConfigured: boolean } {
-  let url = ENV_SUPABASE_URL;
-  let anonKey = ENV_SUPABASE_ANON_KEY;
-
-  if (typeof window !== 'undefined') {
-    const savedUrl = localStorage.getItem(STORED_URL_KEY);
-    const savedKey = localStorage.getItem(STORED_ANON_KEY);
-    if (savedUrl && savedKey) {
-      url = savedUrl;
-      anonKey = savedKey;
-    }
-  }
+  const url = ENV_SUPABASE_URL.trim();
+  const anonKey = ENV_SUPABASE_ANON_KEY.trim();
 
   const isConfigured = Boolean(
     url &&
@@ -37,20 +25,6 @@ export function getSupabaseCredentials(): { url: string; anonKey: string; isConf
   );
 
   return { url, anonKey, isConfigured };
-}
-
-export function saveSupabaseCredentials(url: string, anonKey: string): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORED_URL_KEY, url.trim());
-    localStorage.setItem(STORED_ANON_KEY, anonKey.trim());
-  }
-}
-
-export function clearSupabaseCredentials(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(STORED_URL_KEY);
-    localStorage.removeItem(STORED_ANON_KEY);
-  }
 }
 
 // Singleton client initialization

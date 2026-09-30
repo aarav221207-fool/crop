@@ -142,7 +142,7 @@ export class LiveAgroWeatherProvider implements WeatherProvider {
 
     try {
       // Nationwide Open-Meteo Agro-Met API requesting all required parameters
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,cloud_cover,weather_code,vapour_pressure_deficit&hourly=soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m,surface_pressure,cloud_cover,weather_code,vapour_pressure_deficit&hourly=soil_temperature_0_to_7cm,soil_moisture_0_to_7cm&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,et0_fao_evapotranspiration&timezone=auto`;
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -235,18 +235,15 @@ export class LiveAgroWeatherProvider implements WeatherProvider {
             min: daily.temperature_2m_min?.[idx] ?? 0,
             max: daily.temperature_2m_max?.[idx] ?? 0,
           },
-          humidity: 60,
+          humidity: current.relative_humidity_2m ?? 0,
           precipitation: daily.precipitation_sum?.[idx] ?? 0,
-          precipitationProbability: (daily.precipitation_sum?.[idx] || 0) > 0 ? 70 : 10,
-          windSpeed: 12,
+          precipitationProbability: daily.precipitation_probability_max?.[idx] ?? ((daily.precipitation_sum?.[idx] || 0) > 0 ? 60 : 0),
+          windSpeed: daily.wind_speed_10m_max?.[idx] ?? current.wind_speed_10m ?? 0,
           conditions: (daily.precipitation_sum?.[idx] || 0) > 0 ? 'Precipitation Forecast' : 'Dry / Clear',
           et0: daily.et0_fao_evapotranspiration?.[idx],
         })),
         quality: {
-          completeness: 1.0,
-          accuracy: 0.96,
           freshness: 0.1,
-          reliabilityScore: 0.98,
           lastValidated: retrievedAt,
         },
       };
@@ -434,9 +431,21 @@ export class CopernicusSentinel2Provider implements SatelliteProvider {
       // Check if Copernicus OAuth credentials exist for raster band download
       const hasCopernicusAuth = typeof process !== 'undefined' && Boolean(process.env?.COPERNICUS_CLIENT_SECRET);
 
-      // In accordance with User Requirements 3 & 4:
-      // Store actual scene ID, acquisition time, provider, farm, geometry, retrieval timestamp.
-      // If genuine raster bands are not downloaded via OAuth, do NOT fabricate fake NDVI numbers (e.g. 0.684).
+      // Extract actual cloud coverage from product attributes if provided by Copernicus OData
+      let actualCloudCover: number | undefined = undefined;
+      if (Array.isArray(latestProduct.Attributes)) {
+        const cloudAttr = latestProduct.Attributes.find(
+          (a: any) => a.Name === 'cloudCover' || a.Name === 'cloudCoverPercentage' || a.Name === 'cloudCoverage'
+        );
+        if (cloudAttr && typeof cloudAttr.Value === 'number') {
+          actualCloudCover = Math.round(cloudAttr.Value * 10) / 10;
+        }
+      } else if (typeof latestProduct.CloudCoverage === 'number') {
+        actualCloudCover = Math.round(latestProduct.CloudCoverage * 10) / 10;
+      }
+
+      // Sentinel-2 L2A product record.
+      // Strict Honesty: NDVI is undefined because B04 & B08 raw spectral rasters have not been processed.
       const satelliteData: SatelliteData = {
         location: { latitude: lat, longitude: lon },
         captureDate: acquisitionTime,
@@ -445,16 +454,15 @@ export class CopernicusSentinel2Provider implements SatelliteProvider {
         sceneId: productName,
         productId,
         mgrsTile,
-        cloudCover: 12.5, // Standard acceptable scene cloud threshold
+        cloudCover: actualCloudCover,
         resolutionMeters: 10,
         processingLevel: 'Level-2A (Bottom-of-Atmosphere Reflectance)',
         dataType: 'OBSERVED',
         bandsAvailable: ['B02 (Blue 490nm)', 'B03 (Green 560nm)', 'B04 (Red 665nm)', 'B08 (NIR 842nm)'],
         footprintGeometry: footprint,
         retrievalTimestamp: retrievedAt,
+        vegetationIndex: undefined, // NDVI calculation unavailable without downloaded B04 and B08 raster arrays
         quality: {
-          completeness: 1.0,
-          accuracy: 0.95,
           freshness: Math.round((Date.now() - new Date(acquisitionTime).getTime()) / (1000 * 60 * 60 * 24)),
           lastValidated: retrievedAt,
         },
@@ -607,11 +615,18 @@ export class LiveSoilDataProvider implements SoilDataProvider {
         };
       }
 
-      const ph = phRaw !== undefined ? phRaw / 10 : 7.0;
-      const clay = clayRaw !== undefined ? clayRaw / 10 : 35;
-      const sand = sandRaw !== undefined ? sandRaw / 10 : 35;
-      const silt = siltRaw !== undefined ? siltRaw / 10 : 30;
-      const soc = socRaw !== undefined ? socRaw / 100 : 0.6;
+      const ph = phRaw !== undefined ? Math.round((phRaw / 10) * 10) / 10 : undefined;
+      const clay = clayRaw !== undefined ? Math.round((clayRaw / 10) * 10) / 10 : undefined;
+      const sand = sandRaw !== undefined ? Math.round((sandRaw / 10) * 10) / 10 : undefined;
+      const silt = siltRaw !== undefined ? Math.round((siltRaw / 10) * 10) / 10 : undefined;
+      const soc = socRaw !== undefined ? Math.round((socRaw / 100) * 100) / 100 : undefined;
+
+      const layersList: any[] = [];
+      if (clay !== undefined) layersList.push({ property: 'Clay content', depth: '0-5cm', value: clay, unit: '%' });
+      if (sand !== undefined) layersList.push({ property: 'Sand content', depth: '0-5cm', value: sand, unit: '%' });
+      if (silt !== undefined) layersList.push({ property: 'Silt content', depth: '0-5cm', value: silt, unit: '%' });
+      if (ph !== undefined) layersList.push({ property: 'Soil pH (H2O)', depth: '0-5cm', value: ph, unit: 'pH' });
+      if (soc !== undefined) layersList.push({ property: 'Soil Organic Carbon', depth: '0-5cm', value: soc, unit: 'g/kg' });
 
       const soilData: SoilData = {
         location: { latitude: lat, longitude: lon },
@@ -621,20 +636,14 @@ export class LiveSoilDataProvider implements SoilDataProvider {
         datasetVersion: 'SoilGrids v2.0 (ISRIC 2020)',
         retrievedAt,
         soilProperties: {
-          soilType: clay > 40 ? 'Black Clay (Vertisol)' : sand > 50 ? 'Sandy Loam' : 'Clay Loam',
-          texture: { sand, silt, clay },
+          soilType: clay !== undefined && clay > 40 ? 'Black Clay (Vertisol)' : sand !== undefined && sand > 50 ? 'Sandy Loam' : 'Clay Loam',
+          texture: clay !== undefined && sand !== undefined && silt !== undefined ? { sand, silt, clay } : undefined,
           ph,
           organicCarbon: soc,
-          nitrogen: Math.round(soc * 320),
-          phosphorus: 22,
-          potassium: 280,
-          layers: [
-            { property: 'Clay content', depth: '0-5cm', value: clay, unit: '%' },
-            { property: 'Sand content', depth: '0-5cm', value: sand, unit: '%' },
-            { property: 'Silt content', depth: '0-5cm', value: silt, unit: '%' },
-            { property: 'Soil pH (H2O)', depth: '0-5cm', value: ph, unit: 'pH' },
-            { property: 'Soil Organic Carbon', depth: '0-5cm', value: soc, unit: 'g/kg' },
-          ],
+          nitrogen: undefined, // ISRIC SoilGrids does not measure NPK
+          phosphorus: undefined, // ISRIC SoilGrids does not measure NPK
+          potassium: undefined, // ISRIC SoilGrids does not measure NPK
+          layers: layersList,
         },
       };
 

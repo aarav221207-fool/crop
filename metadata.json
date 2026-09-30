@@ -1,6 +1,6 @@
 {
-  "name": "CropTwin - Agricultural Digital Twin Platform",
-  "description": "Sensor-less Digital Twin Platform for Smallholder Farmers, providing crop growth simulation, stress detection, and proactive agricultural advisories.",
+  "name": "AGENT_OS - Autonomous Software Engineering Workstation",
+  "description": "Autonomous software engineering environment powered by OpenRouter multi-model orchestration, Project Brain, and Docker isolated sandbox execution.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

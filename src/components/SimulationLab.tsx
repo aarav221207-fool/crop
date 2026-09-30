@@ -17,6 +17,9 @@ export const SimulationLab: React.FC<SimulationLabProps> = ({
   farms,
   selectedFarmId,
   onSelectFarmId,
+  weather,
+  satellite,
+  soil,
 }) => {
   const [activeFarmId, setActiveFarmId] = useState<string>(
     selectedFarmId || farms[0]?.twinId || ''
@@ -24,18 +27,24 @@ export const SimulationLab: React.FC<SimulationLabProps> = ({
 
   const baseFarm = farms.find((f) => f.twinId === activeFarmId) || farms[0];
 
-  // Simulation controls state
-  const [dap, setDap] = useState<number>(baseFarm?.currentState.daysAfterPlanting || 65);
-  const [soilMoisture, setSoilMoisture] = useState<number>(baseFarm?.currentState.soilMoisture || 40);
-  const [temperature, setTemperature] = useState<number>(
-    baseFarm?.currentState.environmentalConditions.temperature.average || 32
-  );
-  const [rainfall7Days, setRainfall7Days] = useState<number>(
-    baseFarm?.currentState.environmentalConditions.rainfall || 15
-  );
-  const [irrigationType, setIrrigationType] = useState<IrrigationType>(
-    baseFarm?.farmConfiguration.irrigationType || IrrigationType.DRIP
-  );
+  const cropParams = baseFarm?.farmConfiguration?.cropType
+    ? CROP_PARAMETERS_REGISTRY[baseFarm.farmConfiguration.cropType]
+    : undefined;
+
+  const actualDap = baseFarm?.currentState?.daysAfterPlanting;
+  const actualMoisture = baseFarm?.currentState?.soilMoisture ?? (weather?.current?.soilMoisture !== undefined ? Math.round(weather.current.soilMoisture * 100) : undefined);
+  const actualTemp = weather?.current?.temperature ?? baseFarm?.currentState?.environmentalConditions?.temperature?.average;
+  const actualRain = baseFarm?.currentState?.environmentalConditions?.rainfall ?? (weather?.current?.precipitation !== undefined ? weather.current.precipitation : 0);
+  const actualIrrigation = baseFarm?.farmConfiguration?.irrigationType ?? IrrigationType.DRIP;
+
+  const isDataAvailable = typeof actualDap === 'number' && typeof actualMoisture === 'number' && typeof actualTemp === 'number';
+
+  // Simulation controls state (initialized from genuine live observations)
+  const [dap, setDap] = useState<number>(actualDap ?? 0);
+  const [soilMoisture, setSoilMoisture] = useState<number>(actualMoisture ?? 0);
+  const [temperature, setTemperature] = useState<number>(actualTemp ?? 0);
+  const [rainfall7Days, setRainfall7Days] = useState<number>(actualRain ?? 0);
+  const [irrigationType, setIrrigationType] = useState<IrrigationType>(actualIrrigation);
 
   // Gemini AI Scenario Explanation state
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
@@ -47,22 +56,28 @@ export const SimulationLab: React.FC<SimulationLabProps> = ({
     if (onSelectFarmId) onSelectFarmId(id);
     const target = farms.find((f) => f.twinId === id);
     if (target) {
-      setDap(target.currentState.daysAfterPlanting);
-      setSoilMoisture(target.currentState.soilMoisture);
-      setTemperature(target.currentState.environmentalConditions.temperature.average);
-      setRainfall7Days(target.currentState.environmentalConditions.rainfall);
-      setIrrigationType(target.farmConfiguration.irrigationType);
+      const tDap = target.currentState?.daysAfterPlanting ?? 0;
+      const tMoist = target.currentState?.soilMoisture ?? 0;
+      const tTemp = target.currentState?.environmentalConditions?.temperature?.average ?? 0;
+      const tRain = target.currentState?.environmentalConditions?.rainfall ?? 0;
+      const tIrr = target.farmConfiguration?.irrigationType ?? IrrigationType.DRIP;
+
+      setDap(tDap);
+      setSoilMoisture(tMoist);
+      setTemperature(tTemp);
+      setRainfall7Days(tRain);
+      setIrrigationType(tIrr);
       setAiExplanation(null);
     }
   };
 
   const handleReset = () => {
-    if (baseFarm) {
-      setDap(baseFarm.currentState.daysAfterPlanting);
-      setSoilMoisture(baseFarm.currentState.soilMoisture);
-      setTemperature(baseFarm.currentState.environmentalConditions.temperature.average);
-      setRainfall7Days(baseFarm.currentState.environmentalConditions.rainfall);
-      setIrrigationType(baseFarm.farmConfiguration.irrigationType);
+    if (baseFarm && isDataAvailable) {
+      setDap(actualDap!);
+      setSoilMoisture(actualMoisture!);
+      setTemperature(actualTemp!);
+      setRainfall7Days(actualRain);
+      setIrrigationType(actualIrrigation);
       setAiExplanation(null);
       setExplainError(null);
     }
@@ -71,10 +86,22 @@ export const SimulationLab: React.FC<SimulationLabProps> = ({
   if (!baseFarm) {
     return (
       <div className="bg-[#11171f] border border-stone-800 rounded-xl p-12 text-center max-w-lg mx-auto space-y-4">
-        <div className="text-3xl">🧪</div>
+        <div className="text-3xl">🌱</div>
         <h2 className="text-xl font-bold text-white">No Farms to Simulate</h2>
         <p className="text-xs text-stone-400">
           Register a farm parcel to execute what-if agronomic stress simulations.
+        </p>
+      </div>
+    );
+  }
+
+  if (!isDataAvailable) {
+    return (
+      <div className="bg-[#11171f] border border-stone-800 rounded-xl p-12 text-center max-w-lg mx-auto space-y-4">
+        <div className="text-3xl">⚠️</div>
+        <h2 className="text-xl font-bold text-white">Simulation Inputs Unavailable</h2>
+        <p className="text-xs text-stone-400">
+          Required live telemetry (crop age, root-zone soil moisture, or ambient temperature) is currently unavailable for this farm parcel. In strict adherence to zero-fake-data policy, TerraTwin will not substitute fake default inputs (such as 31°C, 36%, 65 DAP, 2200 kg/ha).
         </p>
       </div>
     );
@@ -89,15 +116,15 @@ export const SimulationLab: React.FC<SimulationLabProps> = ({
     irrigationType,
   });
 
-  const baselineYield = baseFarm.currentState.predictedYield || 2100;
-  const simYield = simulatedTwin.currentState.predictedYield || 1950;
+  const baselineYield = baseFarm.currentState?.predictedYield ?? cropParams?.yieldPotential?.optimal ?? 0;
+  const simYield = simulatedTwin.currentState?.predictedYield ?? 0;
   const yieldDelta = simYield - baselineYield;
   const yieldDeltaPercent = baselineYield > 0 ? ((yieldDelta / baselineYield) * 100).toFixed(1) : '0';
 
-  const baseWaterStress = baseFarm.currentState.stressIndicators.waterStress;
-  const simWaterStress = simulatedTwin.currentState.stressIndicators.waterStress;
-  const baseHeatStress = baseFarm.currentState.stressIndicators.heatStress;
-  const simHeatStress = simulatedTwin.currentState.stressIndicators.heatStress;
+  const baseWaterStress = baseFarm.currentState?.stressIndicators?.waterStress ?? 0;
+  const simWaterStress = simulatedTwin.currentState?.stressIndicators?.waterStress ?? 0;
+  const baseHeatStress = baseFarm.currentState?.stressIndicators?.heatStress ?? 0;
+  const simHeatStress = simulatedTwin.currentState?.stressIndicators?.heatStress ?? 0;
 
   const handleExplainScenario = async () => {
     setIsExplaining(true);

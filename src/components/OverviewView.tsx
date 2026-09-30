@@ -59,18 +59,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         <p className="text-stone-400 text-sm mt-2 max-w-md mx-auto leading-relaxed">
           Create your first farm parcel to start your digital twin with live weather observations, satellite imagery, and biophysical crop simulations.
         </p>
-        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div className="mt-6 flex items-center justify-center">
           <button
             onClick={onOpenAddFarm || (() => onNavigateTab('farms'))}
             className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
           >
             <span>+ Add farm</span>
-          </button>
-          <button
-            onClick={() => onNavigateTab('farms')}
-            className="w-full sm:w-auto px-5 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 text-sm font-medium rounded-lg transition-colors cursor-pointer"
-          >
-            Explore regional presets
           </button>
         </div>
       </div>
@@ -112,7 +106,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   // Real NDVI value from Copernicus Sentinel-2
   const realNdvi = satellite?.vegetationIndex?.ndvi;
-  const ndviDisplay = typeof realNdvi === 'number' ? realNdvi.toFixed(2) : 'Awaiting pass';
+  const isSceneFound = Boolean(satellite && satellite.sceneId);
+  const ndviDisplay = typeof realNdvi === 'number'
+    ? realNdvi.toFixed(2)
+    : isSceneFound
+      ? 'Unavailable'
+      : 'Awaiting pass';
 
   // Soil moisture
   const moistureVal = farm.currentState?.soilMoisture ?? (weather?.current?.soilMoisture !== undefined ? Math.round(weather.current.soilMoisture * 100) : null);
@@ -231,6 +230,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <p className="text-xs text-stone-400 mt-1 leading-normal">
               {healthDesc}
             </p>
+            {isSceneFound && typeof realNdvi !== 'number' && (
+              <div className="mt-2 text-[11px] font-mono text-amber-300 bg-amber-950/40 border border-amber-800/60 px-2 py-1 rounded-sm">
+                🛰️ Sentinel-2 scene available · NDVI calculation unavailable
+              </div>
+            )}
           </div>
           <div className="w-full bg-stone-800 h-1.5 rounded-full overflow-hidden">
             <div

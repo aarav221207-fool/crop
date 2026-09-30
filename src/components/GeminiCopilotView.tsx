@@ -111,8 +111,8 @@ export const GeminiCopilotView: React.FC<GeminiCopilotViewProps> = ({
 I have loaded real biophysical telemetry for **${farm!.location.district}, ${farm!.location.state}** (${farm!.farmConfiguration.cropType.toUpperCase()} · ${farm!.currentState.daysAfterPlanting} DAP).
 
 - **Weather (Open-Meteo):** ${weather ? `${weather.current?.temperature}°C · ${weather.current?.humidity}% RH · Rain: ${weather.current?.precipitation || 0}mm` : 'Weather unavailable'}
-- **Earth Observation (Copernicus Sentinel-2):** ${satellite?.vegetationIndex?.ndvi ? `NDVI ${satellite.vegetationIndex.ndvi.toFixed(2)} (Observed)` : 'Awaiting Sentinel-2 pass'}
-- **Soil (ISRIC 250m Spatial Model):** ${soil ? `pH ${soil.soilProperties?.ph} · ${soil.soilProperties?.soilType}` : 'Soil data unavailable'}
+- **Earth Observation (Copernicus Sentinel-2):** ${satellite?.vegetationIndex?.ndvi ? `NDVI ${satellite.vegetationIndex.ndvi.toFixed(2)} (Observed)` : satellite ? '🛰️ Sentinel-2 scene available · NDVI calculation unavailable' : 'Awaiting Sentinel-2 pass'}
+- **Soil (ISRIC 250m Spatial Model):** ${soil ? `${soil.soilProperties?.ph !== undefined ? `pH ${soil.soilProperties.ph} · ` : ''}${soil.soilProperties?.soilType || 'Spatial Model'}` : 'Soil data unavailable'}
 - **Digital Twin Model Result:** ${farm!.currentState?.predictedYield ? `${farm!.currentState.predictedYield} kg/ha (MODEL PREDICTION)` : 'Computing baseline'}
 
 Ask an agronomic question or select one of the contextual prompts below to begin.`,

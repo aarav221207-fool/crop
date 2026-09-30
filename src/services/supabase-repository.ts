@@ -42,6 +42,7 @@ import {
 import { FarmTwin } from '../types/farm-twin';
 import { Advisory } from '../types/advisory';
 import { CropType, CropStage, IrrigationType, SoilType, Priority, AdvisoryType, AdvisoryCategory } from '../types/core';
+import { CROP_PARAMETERS_REGISTRY } from '../adapters/crop-twin-simulation-service';
 import { v4 as uuidv4 } from 'uuid';
 
 // In-session memory cache for immediate reactivity and offline tolerance
@@ -156,7 +157,11 @@ export class SupabaseRepository {
                   solarRadiation: 20,
                   lastUpdated: new Date().toISOString(),
                 },
-                predictedYield: Number(activeCycle?.target_yield_kg_ha || 2200),
+                predictedYield: Number(
+                  activeCycle?.target_yield_kg_ha ||
+                  CROP_PARAMETERS_REGISTRY[(activeCycle?.crop_code as CropType) || CropType.COTTON]?.yieldPotential?.optimal ||
+                  2400
+                ),
                 confidenceLevel: 0.85,
                 lastUpdated: new Date().toISOString(),
               },
@@ -257,7 +262,7 @@ export class SupabaseRepository {
             0,
             Math.floor((Date.now() - new Date(params.sowingDate).getTime()) / (1000 * 60 * 60 * 24))
           ),
-          target_yield_kg_ha: 2200,
+          target_yield_kg_ha: CROP_PARAMETERS_REGISTRY[params.cropType]?.yieldPotential?.optimal || 2400,
           is_active: true,
         });
 
@@ -317,7 +322,7 @@ export class SupabaseRepository {
           solarRadiation: 21,
           lastUpdated: new Date().toISOString(),
         },
-        predictedYield: 2300,
+        predictedYield: CROP_PARAMETERS_REGISTRY[params.cropType]?.yieldPotential?.optimal || 2400,
         confidenceLevel: 0.88,
         lastUpdated: new Date().toISOString(),
       },

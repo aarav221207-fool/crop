@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { getSupabaseCredentials, saveSupabaseCredentials, clearSupabaseCredentials, getSupabase } from '../lib/supabase';
+import { getSupabaseCredentials, getSupabase } from '../lib/supabase';
 
 export const ArchitectureConfigPanel: React.FC = () => {
-  const [supabaseUrl, setSupabaseUrl] = useState<string>('');
-  const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>('');
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'checking' | 'connected' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [creds, setCreds] = useState<{ url: string; anonKey: string; isConfigured: boolean }>({
+    url: '',
+    anonKey: '',
+    isConfigured: false,
+  });
 
   useEffect(() => {
-    const creds = getSupabaseCredentials();
-    setSupabaseUrl(creds.url);
-    setSupabaseAnonKey(creds.anonKey);
-    if (creds.isConfigured) {
-      testConnection(creds.url, creds.anonKey);
+    const loadedCreds = getSupabaseCredentials();
+    setCreds(loadedCreds);
+    if (loadedCreds.isConfigured) {
+      testConnection();
     }
   }, []);
 
-  const testConnection = async (url?: string, key?: string) => {
+  const testConnection = async () => {
     setConnectionStatus('checking');
     setErrorMessage('');
 
@@ -28,10 +29,9 @@ export const ArchitectureConfigPanel: React.FC = () => {
         return;
       }
 
-      // Test connection with lightweight auth / session check
+      // Test connection with lightweight table check
       const { error } = await client.from('farms').select('id', { count: 'exact', head: true });
       if (error && error.code !== 'PGRST116') {
-        // PGRST116 or empty table is fine, other error may indicate invalid key or network error
         if (error.message.includes('JWT') || error.message.includes('apikey')) {
           setConnectionStatus('error');
           setErrorMessage(error.message);
@@ -44,29 +44,6 @@ export const ArchitectureConfigPanel: React.FC = () => {
       setConnectionStatus('error');
       setErrorMessage(err.message || 'Connection test failed.');
     }
-  };
-
-  const handleSave = () => {
-    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) {
-      clearSupabaseCredentials();
-      setConnectionStatus('idle');
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
-      return;
-    }
-
-    saveSupabaseCredentials(supabaseUrl.trim(), supabaseAnonKey.trim());
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
-    testConnection(supabaseUrl.trim(), supabaseAnonKey.trim());
-  };
-
-  const handleReset = () => {
-    clearSupabaseCredentials();
-    setSupabaseUrl('');
-    setSupabaseAnonKey('');
-    setConnectionStatus('idle');
-    setErrorMessage('');
   };
 
   return (
@@ -98,86 +75,70 @@ export const ArchitectureConfigPanel: React.FC = () => {
             <span className="px-3 py-1.5 bg-sky-950/80 border border-sky-500/50 text-sky-400 text-xs font-mono rounded-xs">
               Testing Connection...
             </span>
+          ) : creds.isConfigured ? (
+            <span className="px-3 py-1.5 bg-rose-950/80 border border-rose-500/50 text-rose-400 text-xs font-mono rounded-xs">
+              Connection Failed
+            </span>
           ) : (
             <span className="px-3 py-1.5 bg-amber-950/80 border border-amber-500/50 text-amber-400 text-xs font-mono rounded-xs">
-              Awaiting Configuration
+              Awaiting Env Variables
             </span>
           )}
         </div>
       </div>
 
-      {/* 2. Supabase Connection Credentials */}
+      {/* 2. Supabase Connection Credentials Verification (Strict Zero localStorage) */}
       <div className="border border-slate-800 bg-[#121820] p-5 rounded-xs space-y-4">
         <div className="border-b border-slate-800 pb-3 flex justify-between items-center">
           <div>
             <h2 className="text-sm font-semibold text-white uppercase tracking-wider font-mono">
-              Supabase Project Credentials
+              Supabase Project Environment Status
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Configures connection to your Supabase PostgreSQL database and Authentication.
+              Production Supabase credentials are configured strictly via build/runtime environment variables.
             </p>
           </div>
           <div className="text-xs font-mono text-emerald-400">
-            Public Anon Client Only
+            RLS Public Client
           </div>
         </div>
 
         <div className="space-y-4 max-w-3xl text-xs font-mono">
-          <div className="space-y-1">
-            <label className="text-slate-300 block">Supabase Project URL (VITE_SUPABASE_URL):</label>
-            <input
-              type="text"
-              value={supabaseUrl}
-              onChange={(e) => setSupabaseUrl(e.target.value)}
-              placeholder="https://xyzcompany.supabase.co"
-              className="w-full bg-[#161f2a] border border-slate-700 text-xs text-slate-200 px-3 py-2 rounded-xs focus:outline-hidden focus:border-emerald-500 font-mono placeholder:text-slate-500"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xs space-y-1">
+              <span className="text-slate-500 block text-[11px]">VITE_SUPABASE_URL</span>
+              <span className="text-white font-mono break-all">
+                {creds.url ? creds.url : <span className="text-amber-400">Not set in environment</span>}
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xs space-y-1">
+              <span className="text-slate-500 block text-[11px]">VITE_SUPABASE_ANON_KEY</span>
+              <span className="text-white font-mono">
+                {creds.anonKey ? `${creds.anonKey.substring(0, 12)}••••••••••••` : <span className="text-amber-400">Not set in environment</span>}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="text-slate-300 block">Supabase Public Anon Key (VITE_SUPABASE_ANON_KEY):</label>
-            <input
-              type="password"
-              value={supabaseAnonKey}
-              onChange={(e) => setSupabaseAnonKey(e.target.value)}
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              className="w-full bg-[#161f2a] border border-slate-700 text-xs text-slate-200 px-3 py-2 rounded-xs focus:outline-hidden focus:border-emerald-500 font-mono placeholder:text-slate-500"
-            />
-            <span className="text-[11px] text-slate-500 block pt-0.5">
-              Service role key is NEVER used in browser code. Database permissions are restricted via Row Level Security (RLS).
-            </span>
+          <div className="p-3 bg-slate-900/40 border border-slate-800/80 rounded-xs text-[11px] text-slate-400 space-y-1">
+            <div>• <strong>Environment Isolation:</strong> Public client credentials are loaded from <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code>.</div>
+            <div>• <strong>Zero Service Key in Browser:</strong> <code>SUPABASE_SERVICE_ROLE_KEY</code> is never exposed or imported in client bundles.</div>
+            <div>• <strong>Zero localStorage Storage:</strong> Credentials cannot be injected or modified via browser local storage.</div>
           </div>
 
           {errorMessage && (
             <div className="p-3 bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs rounded-xs">
-              Connection Error: {errorMessage}
+              Connection Diagnostic: {errorMessage}
             </div>
           )}
 
-          <div className="flex items-center space-x-3 pt-2">
+          <div className="flex items-center space-x-3 pt-1">
             <button
-              onClick={handleSave}
+              onClick={testConnection}
               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xs transition-colors cursor-pointer"
             >
-              Save Credentials & Connect
+              Verify Supabase Connection
             </button>
-            <button
-              onClick={() => testConnection()}
-              className="px-4 py-2 bg-[#16212e] hover:bg-[#1f2d3d] border border-slate-700 text-slate-200 rounded-xs transition-colors cursor-pointer"
-            >
-              Test Connection
-            </button>
-            <button
-              onClick={handleReset}
-              className="px-3 py-2 text-slate-500 hover:text-slate-300 rounded-xs transition-colors cursor-pointer"
-            >
-              Reset
-            </button>
-            {saveSuccess && (
-              <span className="text-emerald-400 text-xs">
-                ✓ Saved successfully.
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -209,14 +170,14 @@ export const ArchitectureConfigPanel: React.FC = () => {
           <div className="border border-slate-800 p-4 bg-slate-900/60 space-y-2">
             <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase">
               <span>Earth Observation</span>
-              <span className="text-slate-400 font-bold">NOT CONFIGURED</span>
+              <span className="text-emerald-400 font-bold">COPERNICUS L2A</span>
             </div>
             <h3 className="font-bold text-white text-sm">Copernicus Sentinel-2</h3>
             <p className="text-slate-400 text-xs font-sans leading-relaxed">
-              10m multispectral Level-2A Bottom-Of-Atmosphere (BOA) surface reflectance for NDVI, EVI, and Leaf Area Index (LAI).
+              10m multispectral Level-2A Bottom-Of-Atmosphere (BOA) surface reflectance. NDVI requires downloaded and processed B04/B08 bands.
             </p>
             <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-800">
-              • Status: Honest unavailable status when unconfigured<br />
+              • Status: Live Copernicus Data Space Ecosystem catalog query<br />
               • Zero fake NDVI values policy active
             </div>
           </div>
