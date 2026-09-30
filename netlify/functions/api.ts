@@ -113,7 +113,11 @@ async function callAiModel(
         promptText = contents;
       }
 
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const baseUrl = (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+      const freeOnly = process.env.OPENROUTER_FREE_ONLY === 'true';
+      const modelName = freeOnly ? 'google/gemini-2.0-flash-exp:free' : 'google/gemini-2.0-flash-001';
+
+      const res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +126,7 @@ async function callAiModel(
           'X-Title': 'TerraTwin Agricultural Digital Twin',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-001',
+          model: modelName,
           messages: [
             ...(systemInstruction ? [{ role: 'system', content: systemInstruction }] : []),
             { role: 'user', content: promptText },
@@ -134,7 +138,7 @@ async function callAiModel(
         const data = await res.json();
         const reply = data.choices?.[0]?.message?.content;
         if (reply) {
-          return { text: reply, modelUsed: 'openrouter/google/gemini-2.0-flash-001' };
+          return { text: reply, modelUsed: `openrouter/${modelName}` };
         }
       }
     } catch (openRouterErr: any) {
